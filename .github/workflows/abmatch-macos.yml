@@ -47,7 +47,7 @@ jobs:
 
     steps:
       - name: Check out sources
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Select Xcode
         id: xcode
@@ -203,7 +203,7 @@ jobs:
           ls -lh "ABmatch-vst3-macos${DEPLOYMENT_TARGET}-${ARCHS}.zip"
 
       - name: Upload VST3
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ABmatch-vst3-macos10.13-x86_64
           path: ABmatch-vst3-macos10.13-x86_64.zip
