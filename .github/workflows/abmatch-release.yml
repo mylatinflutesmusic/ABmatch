@@ -24,14 +24,14 @@ jobs:
       - name: Download VST3 bundle
         uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.build.outputs.artifact-name }}
+          name: ABmatch-vst3-macos10.13-x86_64
           path: dist
 
       - name: Create or update release
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
           TAG: ${{ github.ref_name }}
-          XCODE: ${{ needs.build.outputs.xcode-version }}
         run: |
           set -euo pipefail
 
@@ -43,6 +43,9 @@ jobs:
             exit 1
           fi
 
+          XCODE=$(sed -n 's/^xcode=//p' dist/build-info.txt 2>/dev/null || true)
+          XCODE=${XCODE:-unknown}
+
           NOTES=$(cat <<EOF
           macOS 10.13 (High Sierra) VST3, x86_64 only.
 
@@ -52,15 +55,17 @@ jobs:
           EOF
           )
 
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "dist/$ASSET#ABmatch-vst3-macos10.13-x86_64.zip" --clobber
-            gh release edit "$TAG" --notes "$NOTES"
+          if gh release view "$TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
+            gh release upload "$TAG" "dist/$ASSET#ABmatch-vst3-macos10.13-x86_64.zip" \
+              --repo "$GH_REPO" --clobber
+            gh release edit "$TAG" --repo "$GH_REPO" --notes "$NOTES"
           else
             gh release create "$TAG" "dist/$ASSET#ABmatch-vst3-macos10.13-x86_64.zip" \
+              --repo "$GH_REPO" \
               --title "ABmatch ${TAG} - macOS 10.13 (x86_64)" \
               --notes "$NOTES"
           fi
 
           echo
-          echo "Release: $(gh release view "$TAG" --json url --jq .url)"
-          gh release view "$TAG" --json assets --jq '.assets[] | "asset: " + .name + " (" + (.size|tostring) + " bytes)"'
+          echo "Release: $(gh release view "$TAG" --repo "$GH_REPO" --json url --jq .url)"
+          gh release view "$TAG" --repo "$GH_REPO" --json assets --jq '.assets[] | "asset: " + .name + " (" + (.size|tostring) + " bytes)"'

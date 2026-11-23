@@ -16,13 +16,6 @@ on:
         required: false
         type: string
         default: "14.3.1"
-    outputs:
-      xcode_version:
-        description: Xcode version actually used
-        value: ${{ jobs.build.outputs.xcode_version }}
-      artifact_name:
-        description: Name of the uploaded artifact
-        value: ABmatch-vst3-macos10.13-x86_64
 
 permissions:
   contents: read
@@ -35,8 +28,6 @@ jobs:
     # avoids relying on that.
     runs-on: macos-15-intel
     timeout-minutes: 60
-    outputs:
-      xcode_version: ${{ steps.xcode.outputs.version }}
     env:
       DEPLOYMENT_TARGET: "10.13"
       ARCHS: "x86_64"
@@ -198,12 +189,23 @@ jobs:
           ditto -c -k --sequesterRsrc --keepParent "$BUNDLE" \
             "ABmatch-vst3-macos${DEPLOYMENT_TARGET}-${ARCHS}.zip"
 
+          # Provenance for the release notes, carried inside the artifact so
+          # the release job does not depend on cross-workflow outputs.
+          {
+            echo "xcode=$(xcodebuild -version | awk 'NR==1 {print $2}')"
+            echo "deployment_target=${DEPLOYMENT_TARGET}"
+            echo "architectures=${ARCHS}"
+          } > build-info.txt
+
+          cat build-info.txt
           ls -lh "ABmatch-vst3-macos${DEPLOYMENT_TARGET}-${ARCHS}.zip"
 
       - name: Upload VST3
         uses: actions/upload-artifact@v7
         with:
           name: ABmatch-vst3-macos10.13-x86_64
-          path: ABmatch-vst3-macos10.13-x86_64.zip
+          path: |
+            ABmatch-vst3-macos10.13-x86_64.zip
+            build-info.txt
           if-no-files-found: error
           retention-days: 30
