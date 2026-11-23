@@ -1,0 +1,66 @@
+name: ABmatch release (macOS 10.13)
+
+# Push a tag (for example v1.4.0) to build the High Sierra VST3 and attach it
+# to a GitHub Release. Release assets do not expire, so the download link stays
+# valid instead of dropping off after the 30-day artifact retention.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    uses: ./.github/workflows/abmatch-build.yml
+
+  release:
+    name: Attach VST3 to release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download VST3 bundle
+        uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}
+          path: dist
+
+      - name: Create or update release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          XCODE: ${{ needs.build.outputs.xcode-version }}
+        run: |
+          set -euo pipefail
+
+          ASSET="ABmatch-vst3-macos10.13-x86_64.zip"
+
+          if [ ! -f "dist/$ASSET" ]; then
+            echo "::error::Artifact does not contain $ASSET"
+            ls -R dist
+            exit 1
+          fi
+
+          NOTES=$(cat <<EOF
+          macOS 10.13 (High Sierra) VST3, x86_64 only.
+
+          Unzip and copy ABmatch.vst3 to ~/Library/Audio/Plug-Ins/VST3, then rescan plug-ins in your host.
+
+          Built and checked in CI: architectures x86_64 only, minimum OS 10.13, no chained fixups, ad-hoc signed. Built with Xcode $XCODE.
+          EOF
+          )
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "dist/$ASSET#ABmatch-vst3-macos10.13-x86_64.zip" --clobber
+            gh release edit "$TAG" --notes "$NOTES"
+          else
+            gh release create "$TAG" "dist/$ASSET#ABmatch-vst3-macos10.13-x86_64.zip" \
+              --title "ABmatch ${TAG} - macOS 10.13 (x86_64)" \
+              --notes "$NOTES"
+          fi
+
+          echo
+          echo "Release: $(gh release view "$TAG" --json url --jq .url)"
+          gh release view "$TAG" --json assets --jq '.assets[] | "asset: " + .name + " (" + (.size|tostring) + " bytes)"'
