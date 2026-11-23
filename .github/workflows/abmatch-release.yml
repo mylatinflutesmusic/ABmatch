@@ -1,8 +1,9 @@
 name: ABmatch release (macOS 10.13)
 
 # Push a tag (for example v1.4.0) to build the High Sierra VST3 and attach it
-# to a GitHub Release. Release assets do not expire, so the download link stays
-# valid instead of dropping off after the 30-day artifact retention.
+# to a GitHub Release, together with a SHA256 checksum file. Release assets do
+# not expire, so the download link stays valid instead of dropping off after
+# the 30-day artifact retention.
 
 on:
   push:
@@ -46,26 +47,56 @@ jobs:
           XCODE=$(sed -n 's/^xcode=//p' dist/build-info.txt 2>/dev/null || true)
           XCODE=${XCODE:-unknown}
 
-          NOTES=$(cat <<EOF
+          # Checksum file published next to the zip.
+          ( cd dist && shasum -a 256 "$ASSET" > "$ASSET.sha256" && cat "$ASSET.sha256" )
+
+          # Release notes. Quoted heredoc: no shell expansion, so the fenced
+          # blocks below reach GitHub untouched.
+          cat > notes.md <<'EOF'
           macOS 10.13 (High Sierra) VST3, x86_64 only.
 
-          Unzip and copy ABmatch.vst3 to ~/Library/Audio/Plug-Ins/VST3, then rescan plug-ins in your host.
+          Unzip and copy ABmatch.vst3 to `~/Library/Audio/Plug-Ins/VST3`, then rescan plug-ins in your host.
 
-          Built and checked in CI: architectures x86_64 only, minimum OS 10.13, no chained fixups, ad-hoc signed. Built with Xcode $XCODE.
+          ### Ad-hoc signed, not notarised
+
+          The plug-in is ad-hoc signed, not signed with an Apple Developer ID and not notarised. macOS may quarantine the download, so the host can ignore or refuse the plug-in until you allow it:
+
+          - High Sierra: System Preferences > Security & Privacy > General, then click **Open Anyway** for ABmatch.
+          - Newer macOS: System Settings > Privacy & Security, then **Open Anyway**.
+
+          Or clear the quarantine flag on the installed bundle:
+
+          ```
+          xattr -dr com.apple.quarantine ~/Library/Audio/Plug-Ins/VST3/ABmatch.vst3
+          ```
+
+          ### Verify the download
+
+          The zip's SHA256 is published next to it as `ABmatch-vst3-macos10.13-x86_64.zip.sha256`:
+
+          ```
+          shasum -a 256 -c ABmatch-vst3-macos10.13-x86_64.zip.sha256
+          ```
           EOF
-          )
+
+          printf '\nBuilt and checked in CI: architectures x86_64 only, minimum OS 10.13, no chained fixups. Built with Xcode %s.\n' "$XCODE" >> notes.md
 
           if gh release view "$TAG" --repo "$GH_REPO" >/dev/null 2>&1; then
-            gh release upload "$TAG" "dist/$ASSET#ABmatch-vst3-macos10.13-x86_64.zip" \
+            gh release upload "$TAG" \
+              "dist/$ASSET#ABmatch-vst3-macos10.13-x86_64.zip" \
+              "dist/$ASSET.sha256#ABmatch-vst3-macos10.13-x86_64.zip.sha256" \
               --repo "$GH_REPO" --clobber
-            gh release edit "$TAG" --repo "$GH_REPO" --notes "$NOTES"
+            gh release edit "$TAG" --repo "$GH_REPO" --notes-file notes.md
           else
-            gh release create "$TAG" "dist/$ASSET#ABmatch-vst3-macos10.13-x86_64.zip" \
+            gh release create "$TAG" \
+              "dist/$ASSET#ABmatch-vst3-macos10.13-x86_64.zip" \
+              "dist/$ASSET.sha256#ABmatch-vst3-macos10.13-x86_64.zip.sha256" \
               --repo "$GH_REPO" \
               --title "ABmatch ${TAG} - macOS 10.13 (x86_64)" \
-              --notes "$NOTES"
+              --notes-file notes.md
           fi
 
           echo
           echo "Release: $(gh release view "$TAG" --repo "$GH_REPO" --json url --jq .url)"
-          gh release view "$TAG" --repo "$GH_REPO" --json assets --jq '.assets[] | "asset: " + .name + " (" + (.size|tostring) + " bytes)"'
+          gh release view "$TAG" --repo "$GH_REPO" --json assets \
+            --jq '.assets[] | "asset: " + .name + " (" + (.size|tostring) + " bytes)"'
