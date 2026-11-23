@@ -1,0 +1,6 @@
+build/
+build-macos/
+.vs/
+.tools/
+*.log
+ABmatch-*.zip
